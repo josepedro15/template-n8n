@@ -571,7 +571,7 @@
                     "parameters": [
                         {
                             "name": "Authorization",
-                            "value": "Token e3a5f69147649c6be30210244f203e043c568aff"
+                            "value": "Token {{SUA_API_KEY_AQUI}}"
                         }
                     ]
                 },
