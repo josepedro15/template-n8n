@@ -1,0 +1,835 @@
+{
+    "nodes": [
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                -1568,
+                -32
+            ],
+            "id": "b7137961-37ea-4ed1-b79e-b734da48a9b7",
+            "name": "When clicking 'Execute workflow'"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Pega os dados da variável do Aggregate\nconst basedados = $item(0).$node[\"Aggregate\"].json[\"basedados\"]\n\n// Garante que é um array e pega o primeiro item\nconst item = Array.isArray(basedados) ? basedados[0] : basedados\n\n// Pega o conteúdo da chave \"query\"\nconst query = item.query\n\nlet telefone\n\n// 1️⃣ Extrai tudo que estiver entre aspas dentro da query\nconst valores = query.match(/\"([^\"]*)\"/g)?.map(v => v.replace(/\"/g, \"\")) || []\n\n// 2️⃣ Verifica se algum valor parece ser telefone (variações de campo ou @s.whatsapp.net)\nfor (const valor of valores) {\n  // Caso tenha formato WhatsApp\n  if (valor.includes(\"@s.whatsapp.net\")) {\n    telefone = valor\n    break\n  }\n\n  // Caso tenha apenas números (mínimo 10 dígitos)\n  const limpo = valor.replace(/\\D/g, \"\")\n  if (limpo.length >= 10 && limpo.length <= 13) {\n    telefone = limpo\n    break\n  }\n}\n\n// 3️⃣ Se ainda não encontrou, tenta extrair número bruto da string toda\nif (!telefone) {\n  const match = query.match(/\\d{10,13}/)\n  if (match) telefone = match[0]\n}\n\n// 4️⃣ Limpa o telefone (remove domínio se existir)\nif (telefone && telefone.includes(\"@s.whatsapp.net\")) {\n  telefone = telefone.replace(\"@s.whatsapp.net\", \"\")\n}\n\n// Retorna o telefone encontrado\nreturn { telefone }\n"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -864,
+                -32
+            ],
+            "id": "e24fcb94-a9f0-486b-81ad-613922cb378f",
+            "name": "Code in JavaScript",
+            "onError": "continueErrorOutput"
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "={{ $('Code in JavaScript').item.json.telefone }}",
+                "tableName": "{{POSTGRES_TABLE_NAME}}",
+                "contextWindowLength": 30
+            },
+            "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+            "typeVersion": 1.3,
+            "position": [
+                -416,
+                272
+            ],
+            "id": "b17fa5ca-4dfe-4697-95f4-a5f3dd3d450f",
+            "name": "Postgres Chat Memory",
+            "credentials": {
+                "postgres": {
+                    "id": "{{POSTGRES_CREDENTIAL_ID}}",
+                    "name": "{{POSTGRES_CREDENTIAL_NAME}}"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": "gpt-4.1-mini"
+                },
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                -576,
+                240
+            ],
+            "id": "0adfc6f0-4d27-4a67-a9e1-dd87ce4a7e62",
+            "name": "OpenAI Chat Model",
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "{{OPENAI_CREDENTIAL_NAME}}"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "57fd2f27-6da1-4cfd-8315-9138ab191464",
+                            "name": "texto-saida",
+                            "value": "={{ $item(\"0\").$node[\"verifica se está completo a coleta\"].json[\"output\"] }}\nLembrando que o atendente ainda não foi chamado. Você só deve finalizar quando receber a resposta que o atendente foi notificado",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                176,
+                -272
+            ],
+            "id": "7b917661-bf31-48ed-af1a-8e0c0ac09274",
+            "name": "Edit Fields"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "loose",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "7a899e3a-93ee-4524-8ce4-b9f10bee1d91",
+                            "leftValue": "={{ $item(\"0\").$node[\"verifica se está completo a coleta\"].json }}",
+                            "rightValue": "INCOMPLETO",
+                            "operator": {
+                                "type": "string",
+                                "operation": "contains"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "looseTypeValidation": true,
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                -48,
+                -48
+            ],
+            "id": "6381fb20-7ca4-4304-9235-625751dd0cb9",
+            "name": "incompleto?"
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "value": "gpt-4.1-nano",
+                    "mode": "list",
+                    "cachedResultName": "gpt-4.1-nano"
+                },
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                256,
+                224
+            ],
+            "id": "e269eb3a-6adf-4fa3-9d95-64325ab81c44",
+            "name": "OpenAI Chat Model1",
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "{{OPENAI_CREDENTIAL_NAME}}"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{UAZAPI_INSTANCE_URL}}/send/text",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "token",
+                            "value": "={{UAZAPI_INSTANCE_TOKEN_NOTIFICADOR}}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "number",
+                            "value": "={{ADMIN_WHATSAPP_NUMBER}}"
+                        },
+                        {
+                            "name": "text",
+                            "value": "=*Cliente aguardando atendimento*\n\n{{ $item(\"0\").$node[\"Formata Texto Resumo\"].json[\"output\"] }}\n\n*Transferido para:*\nSetor de {{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Setor\"] }}. Telefone:{{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Telefone\"] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1968,
+                -320
+            ],
+            "id": "bb33a948-90b0-41ba-a495-32f122d5cbd9",
+            "name": "Notificador Admin",
+            "disabled": true
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "263217aa-c0c8-4f95-b2fa-c5ec8d97d151",
+                            "name": "tratado",
+                            "value": "={{ $item(\"0\").$node[\"When clicking 'Execute workflow'\"].json[\"query\"].split(\", \").join(\"\\n\") }}\n",
+                            "type": "string"
+                        },
+                        {
+                            "id": "0f11519b-8df7-4e83-a0e5-3a30c0fc454d",
+                            "name": "Telefone: ",
+                            "value": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"telefone\"].replace(/@.*/, \"\") }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "4b2b401d-2a38-4755-94ca-4a4bfe3164d3",
+                            "name": "DATA",
+                            "value": "={{ new Date($now).toLocaleDateString('pt-BR') }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                960,
+                -32
+            ],
+            "id": "f838e5ab-b962-489f-9531-d7c49c1463d9",
+            "name": "Edit Fields2"
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "value": "gpt-4.1-nano",
+                    "mode": "list",
+                    "cachedResultName": "gpt-4.1-nano"
+                },
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                1264,
+                224
+            ],
+            "id": "1ca0da58-db39-4e62-b209-246dc4a0f48e",
+            "name": "OpenAI Chat Model2",
+            "credentials": {
+                "openAiApi": {
+                    "id": "{{OPENAI_CREDENTIAL_ID}}",
+                    "name": "{{OPENAI_CREDENTIAL_NAME}}"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "57fd2f27-6da1-4cfd-8315-9138ab191464",
+                            "name": "texto-saida",
+                            "value": "=Não chegou dados. Você deve reexecutar a tools, enviando todos os dados coletados.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                -848,
+                224
+            ],
+            "id": "1429d6af-e108-4860-aaa8-723b078f6822",
+            "name": "Edit Fields3"
+        },
+        {
+            "parameters": {
+                "aggregate": "aggregateAllItemData",
+                "destinationFieldName": "basedados",
+                "include": "={{ $json.query }}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                -1248,
+                -32
+            ],
+            "id": "e43a775a-40fc-4f86-9bb1-8f468eafbbf3",
+            "name": "Aggregate"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "57fd2f27-6da1-4cfd-8315-9138ab191464",
+                            "name": "texto-saida",
+                            "value": "=  \"Um atendente já foi notificado. - (setor {{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Setor\"] }}) concluída. Não acione a tool novamente, apenas se o cliente pedir.\"",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                2736,
+                -32
+            ],
+            "id": "066faec2-4d38-4bfe-8777-f316d0b73068",
+            "name": "Edit Fields1"
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $item(\"0\").$node[\"When clicking 'Execute workflow'\"].json[\"query\"] }}",
+                "options": {
+                    "systemMessage": "=# SISTEMA DE VALIDAÇÃO DE COLETA DE DADOS\n\n---\n\n## SUA FUNÇÃO\n\nVocê é um validador que analisa se todos os dados necessários foram coletados antes de transferir o atendimento para o setor especializado.\n\n---\n\n## ENTRADA DE DADOS\n\nVocê receberá um JSON com os seguintes campos:\n\n```json\n{\n  \"setor\": \"[setor]\",\n  \"nome\": \"[nome]\",\n  \"cidade\": \"[cidade]\",\n  \"telefone\": \"[telefone]\",\n  \"resumo\": \"[resumo completo]\",\n  \"status_horario\": \"[status]\"\n}\n```\n\n---\n\n## VALIDAÇÃO PRIMÁRIA (OBRIGATÓRIA PARA TODOS OS SETORES)\n\n### 🚨 REGRA CRÍTICA: VERIFICAÇÃO DOS 6 PARÂMETROS OBRIGATÓRIOS\n\n**Antes de validar o conteúdo do resumo, você DEVE verificar se TODOS os 6 campos foram fornecidos e não estão vazios.**\n\n**Campos obrigatórios:**\n1. ✅ **setor** - Deve existir e ser válido (Vendas/Financeiro/Entulhos/SAC/Compras)\n2. ✅ **nome** - Deve existir e não estar vazio\n3. ✅ **cidade** - Deve existir e não estar vazia\n4. ✅ **telefone** - Deve existir e não estar vazio\n5. ✅ **resumo** - Deve existir e não estar vazio\n6. ✅ **status_horario** - Deve existir e ser válido (Dentro do Horário/Almoço/Fora do Horário)\n\n---\n\n### ❌ SE FALTAR QUALQUER CAMPO OU ESTIVER VAZIO:\n\n**Formato de saída:**\n```\nSTATUS: INCOMPLETO\nPODE_TRANSFERIR: NAO\nSETOR: [setor se fornecido, senão \"Não identificado\"]\nDADOS_FALTANTES: [listar campos vazios/ausentes]\nPROXIMA_PERGUNTA: [pergunta para coletar o dado faltante]\nMOTIVO: Dados obrigatórios não foram fornecidos. O agente deve coletar [campo] antes de acionar a tool.\n```\n\n---\n\n## VALIDAÇÃO POR SETOR\n\n### 🛒 VENDAS\n\n**Informações obrigatórias no RESUMO:**\n- ✅ Produto mencionado (com especificações se necessário)\n- ✅ Contexto claro (finalidade: obra, reforma, manutenção, compra, orçamento, etc.)\n\n**IMPORTANTE:**\n- Para o fluxo de VENDAS, **NÃO** é obrigatório identificar tipo de cliente (pessoa física ou empresa)\n- **NÃO** é obrigatório coletar CPF/CNPJ neste fluxo\n\n---\n\n### 💰 FINANCEIRO\n\n**Informações obrigatórias no RESUMO:**\n- ✅ CPF (formato: XXX.XXX.XXX-XX ou 11 dígitos) **OU** CNPJ (14 dígitos ou formatado)\n- ✅ Tipo de dúvida (boleto, pagamento, nota fiscal, segunda via, cobrança, crediário)\n\n**EXCEÇÃO:** Se o cliente recusou fornecer CPF/CNPJ explicitamente, aprovar pela exceção.\n\n---\n\n### 📦 LOGÍSTICA\n\n**Informações obrigatórias no RESUMO:**\n- ✅ Número do pedido (formato: \"#XXXX\" ou \"Pedido XXXX\") **OU** Data da compra\n- ✅ Motivo (rastreamento, reagendamento, problema na entrega)\n\n---\n\n### 🔧 SAC (Pós-venda)\n\n**Informações obrigatórias no RESUMO:**\n- ✅ Identificação: CPF **OU** CNPJ **OU** Número do pedido\n- ✅ Produto com problema (nome do produto)\n- ✅ Descrição do problema (defeito, quebrou, não funciona, etc.)\n\n**EXCEÇÃO:** Se o cliente recusou fornecer CPF/CNPJ mas forneceu número do pedido, aprovar pela exceção.\n\n---\n\n### 🚛 ENTULHOS\n\n**Informações obrigatórias no RESUMO:**\n- ✅ Tipo de solicitação (contratação nova ou renovação)\n- ✅ Urgência (sim ou não)\n\n---\n\n### 🏢 COMPRAS (Fornecedores)\n\n**Informações obrigatórias no RESUMO:**\n- ✅ Identificação como fornecedor\n- ✅ Produtos/serviços que oferece\n\n---\n\n## FORMATO DE SAÍDA\n\n### ✅ QUANDO COMPLETO:\n\n```\nSTATUS: COMPLETO\nPODE_TRANSFERIR: SIM\nSETOR: [setor]\nMENSAGEM: Todos os dados necessários foram coletados. Transferência aprovada.\n```\n\n### ❌ QUANDO INCOMPLETO:\n\n```\nSTATUS: INCOMPLETO\nPODE_TRANSFERIR: NAO\nSETOR: [setor]\nDADOS_FALTANTES: [descrição clara]\nPROXIMA_PERGUNTA: [pergunta exata que o agente deve fazer]\nMOTIVO: [explicação do que está faltando e por quê]\n```\n\n---\n\n## REGRAS CRÍTICAS\n\n1. ✅ **SEMPRE verificar os 6 campos obrigatórios ANTES de validar o resumo**\n2. ✅ **VENDAS: NÃO exigir CPF/CNPJ/tipo de cliente** - apenas produto e contexto\n3. ✅ **FINANCEIRO e SAC: Exigir CPF ou CNPJ** (com exceção de recusa explícita)\n4. ✅ **Aceitar CPF/CNPJ em qualquer formato** (com ou sem pontuação)\n5. ✅ **EXCEÇÃO DE RECUSA:** Se o resumo indicar recusa explícita de fornecer documento, mas outros dados estão completos, APROVAR\n6. ✅ **Seja pragmático:** Se todos os dados essenciais do setor estão presentes, APROVAR\n7. ✅ **NUNCA aprovar se faltar nome, cidade, telefone, resumo ou status_horario**"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3,
+            "position": [
+                -544,
+                -48
+            ],
+            "id": "98389968-8f0f-447e-830a-73f1441264ed",
+            "name": "verifica se está completo a coleta",
+            "retryOnFail": true,
+            "maxTries": 5,
+            "waitBetweenTries": 5000
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $item(\"0\").$node[\"When clicking 'Execute workflow'\"].json[\"query\"] }}",
+                "options": {
+                    "systemMessage": "=# 🤖 PROMPT DE ROTEAMENTO COMPLETO (JSON + MENSAGEM)\n\n## 1. SUA FUNÇÃO\n\nSua única função é analisar um [RESUMO] de atendimento e gerar um objeto JSON contendo **quatro** pares chave-valor: `Setor`, `Atendente`, `Telefone` (formatado) e a `MensagemTransferencia` (o texto humano para o cliente).\n\n---\n\n## 2. BASE DE CONHECIMENTO (Tabela de Roteamento)\n\nVocê DEVE usar a tabela de roteamento abaixo para extrair todas as informações necessárias.\n\n| Setor | Atendente | Telefone (Formatado) | MensagemTransferencia (Frase exata para o cliente) |\n| :--- | :--- | :--- | :--- |\n| **Vendas** | {{ATENDENTE_VENDAS_NOME}} | `{{ATENDENTE_VENDAS_TELEFONE}}` | `{{MENSAGEM_TRANSFERENCIA_VENDAS}}` |\n| **Financeiro** | {{ATENDENTE_FINANCEIRO_NOME}} | `{{ATENDENTE_FINANCEIRO_TELEFONE}}` | `{{MENSAGEM_TRANSFERENCIA_FINANCEIRO}}` |\n| **Entulhos** | {{ATENDENTE_ENTULHOS_NOME}} | `{{ATENDENTE_ENTULHOS_TELEFONE}}` | `{{MENSAGEM_TRANSFERENCIA_ENTULHOS}}` |\n\n---\n\n## 3. REGRAS DE INFERÊNCIA DE SETOR\n\nPara decidir qual **Setor** usar, analise as palavras-chave do [RESUMO]:\n\n* **VENDAS:** \"orçamento\", \"preço\", \"comprar\", \"pedido\", \"dúvida de produto\", \"indicação de profissional\", \"material\", \"frete\", \"entrega\".\n* **FINANCEIRO:** \"boleto\", \"fatura\", \"dívida\", \"segunda via\", \"2ª via\", \"crediário\", \"nota fiscal\", \"pagamento\", \"cadastro\", \"cobrança\".\n* **ENTULHOS:** \"tele entulho\", \"caçamba\", \"retirar entulho\", \"alugar caçamba\", \"renovar caçamba\".\n\n---\n\n## 4. REGRA DE SAÍDA ESTRITA\n\nSua resposta deve conter **APENAS** o objeto JSON.\n\n**FORMATO DE SAÍDA OBRIGATÓRIO (JSON VÁLIDO):**\n```json\n{\n  \"Setor\": \"[Setor Inferido]\",\n  \"Atendente\": \"[Atendente Correspondente]\",\n  \"Telefone\": \"[Telefone Formatado]\",\n  \"MensagemTransferencia\": \"[Mensagem Humana Correspondente]\"\n}\n```"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3,
+            "position": [
+                240,
+                -32
+            ],
+            "id": "785d4d05-52c3-410d-9e67-5f8dbb913599",
+            "name": "DEFINE DISTRIBUIDOR",
+            "retryOnFail": true,
+            "maxTries": 5,
+            "waitBetweenTries": 5000
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $item(\"0\").$node[\"When clicking 'Execute workflow'\"].json[\"query\"] }}",
+                "options": {
+                    "systemMessage": "=🧠 Instrução:\nFormate o texto abaixo de forma organizada e agradável, aplicando emojis padronizados relacionados ao conteúdo (por exemplo: 🏢 para setor, 👤 para nome, 📍 para cidade, 📞 para telefone e 📝 para resumo).\n\nRemova tudo o que vier após o símbolo @ no número de telefone, mantendo apenas o número.\n\nNão altere o texto original, apenas adicione os emojis e melhore a legibilidade com quebras de linha adequadas.\n\nTexto para formatar: {{ $item(\"0\").$node[\"When clicking 'Execute workflow'\"].json[\"query\"] }}"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3,
+            "position": [
+                1264,
+                -32
+            ],
+            "id": "cdbd6275-0c6f-4859-ad34-ba0b16a4137b",
+            "name": "Formata Texto Resumo",
+            "retryOnFail": true,
+            "maxTries": 5,
+            "waitBetweenTries": 5000
+        },
+        {
+            "parameters": {
+                "jsCode": "// 1. Pega a string de saída do nó anterior\n// (Esta é a sua variável)\nconst outputString = $item(\"0\").$node[\"DEFINE DISTRIBUIDOR\"].json[\"output\"];\n\n// 2. Converte (parseia) a string de volta para um objeto JSON real\nconst dadosParseados = JSON.parse(outputString);\n\n// 3. Retorna cada item como um objeto separado\n// O n8n colocará isso dentro de 'json' para o próximo nó\nreturn {\n  Setor: dadosParseados.Setor,\n  Atendente: dadosParseados.Atendente,\n  Telefone: dadosParseados.Telefone,\n  MensagemTransferencia: dadosParseados.MensagemTransferencia\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                640,
+                -32
+            ],
+            "id": "3fd7b0a2-fbb2-4ae9-b137-67ece9ffda0d",
+            "name": "Code in JavaScript1"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{UAZAPI_INSTANCE_URL}}/send/text",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "token",
+                            "value": "={{UAZAPI_INSTANCE_TOKEN_SETOR}}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "number",
+                            "value": "=55{{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Telefone\"] }}"
+                        },
+                        {
+                            "name": "text",
+                            "value": "=*Cliente aguardando atendimento*\n\n{{ $item(\"0\").$node[\"Formata Texto Resumo\"].json[\"output\"] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                2464,
+                -32
+            ],
+            "id": "be33c986-9cf0-4de1-8c76-3ee9cbba8a44",
+            "name": "NOTIFICA SETOR"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{UAZAPI_INSTANCE_URL}}/send/text",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "token",
+                            "value": "={{UAZAPI_INSTANCE_TOKEN_NOTIFICADOR}}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "number",
+                            "value": "={{ADMIN_WHATSAPP_NUMBER_2}}"
+                        },
+                        {
+                            "name": "text",
+                            "value": "=*Cliente aguardando atendimento*\n\n{{ $item(\"0\").$node[\"Formata Texto Resumo\"].json[\"output\"] }}\n\n*Transferido para:*\nSetor de {{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Setor\"] }}. Telefone:{{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Telefone\"] }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                2240,
+                -320
+            ],
+            "id": "edbeb051-ca4f-4323-8b3d-a900c1374143",
+            "name": "Notificador Admin1",
+            "disabled": true
+        },
+        {
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "{{GOOGLE_SHEETS_RESUMOS_ID}}",
+                    "mode": "list",
+                    "cachedResultName": "{{GOOGLE_SHEETS_RESUMOS_NAME}}",
+                    "cachedResultUrl": "{{GOOGLE_SHEETS_RESUMOS_URL}}"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "gid=0",
+                    "mode": "list",
+                    "cachedResultName": "Página1",
+                    "cachedResultUrl": "{{GOOGLE_SHEETS_RESUMOS_URL}}#gid=0"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "DATA": "={{ $item(\"0\").$node[\"Edit Fields2\"].json[\"DATA\"] }}",
+                        "TELEFONE": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"telefone\"] }}",
+                        "RESUMO": "=*Cliente aguardando atendimento*  \n{{ $item(\"0\").$node[\"Formata Texto Resumo\"].json[\"output\"] }}",
+                        "ATENDENTE": "={{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Atendente\"] }} - {{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Telefone\"] }}",
+                        "SETOR DEFINIDO": "={{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"Setor\"] }}"
+                    },
+                    "matchingColumns": [],
+                    "schema": [
+                        {
+                            "id": "DATA",
+                            "displayName": "DATA",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "TELEFONE",
+                            "displayName": "TELEFONE",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "RESUMO",
+                            "displayName": "RESUMO",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true,
+                            "removed": false
+                        },
+                        {
+                            "id": "SETOR DEFINIDO",
+                            "displayName": "SETOR DEFINIDO",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true,
+                            "removed": false
+                        },
+                        {
+                            "id": "ATENDENTE",
+                            "displayName": "ATENDENTE",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true,
+                            "removed": false
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.7,
+            "position": [
+                1664,
+                -32
+            ],
+            "id": "9b884555-4c5b-401b-ad73-b84050988af4",
+            "name": "Append row in sheet",
+            "retryOnFail": true,
+            "maxTries": 5,
+            "waitBetweenTries": 5000,
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "{{GOOGLE_SHEETS_CREDENTIAL_ID}}",
+                    "name": "{{GOOGLE_SHEETS_CREDENTIAL_NAME}}"
+                }
+            },
+            "onError": "continueRegularOutput"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://blubots.com/api/v1/send/message/",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "Token {{BLUBOTS_API_TOKEN}}"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "phone",
+                            "value": "={{ $item(\"0\").$node[\"Append row in sheet\"].json[\"TELEFONE\"] }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ $item(\"0\").$node[\"Append row in sheet\"].json[\"RESUMO\"] }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "waiting"
+                        },
+                        {
+                            "name": "channel_id",
+                            "value": "{{BLUBOTS_CHANNEL_ID}}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                1936,
+                -32
+            ],
+            "id": "fc94b566-69fe-45d7-b0c7-2304c21504bf",
+            "name": "Notifica usuario e move para aguardando2"
+        }
+    ],
+    "connections": {
+        "When clicking 'Execute workflow'": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code in JavaScript": {
+            "main": [
+                [
+                    {
+                        "node": "verifica se está completo a coleta",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Edit Fields3",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Postgres Chat Memory": {
+            "ai_memory": [
+                []
+            ]
+        },
+        "OpenAI Chat Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "verifica se está completo a coleta",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Edit Fields": {
+            "main": [
+                []
+            ]
+        },
+        "incompleto?": {
+            "main": [
+                [
+                    {
+                        "node": "Edit Fields",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "DEFINE DISTRIBUIDOR",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OpenAI Chat Model1": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "DEFINE DISTRIBUIDOR",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notificador Admin": {
+            "main": [
+                [
+                    {
+                        "node": "Notificador Admin1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Edit Fields2": {
+            "main": [
+                [
+                    {
+                        "node": "Formata Texto Resumo",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OpenAI Chat Model2": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Formata Texto Resumo",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate": {
+            "main": [
+                [
+                    {
+                        "node": "Code in JavaScript",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "verifica se está completo a coleta": {
+            "main": [
+                [
+                    {
+                        "node": "incompleto?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "DEFINE DISTRIBUIDOR": {
+            "main": [
+                [
+                    {
+                        "node": "Code in JavaScript1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Formata Texto Resumo": {
+            "main": [
+                [
+                    {
+                        "node": "Append row in sheet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code in JavaScript1": {
+            "main": [
+                [
+                    {
+                        "node": "Edit Fields2",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "NOTIFICA SETOR": {
+            "main": [
+                [
+                    {
+                        "node": "Edit Fields1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notificador Admin1": {
+            "main": [
+                [
+                    {
+                        "node": "NOTIFICA SETOR",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Append row in sheet": {
+            "main": [
+                [
+                    {
+                        "node": "Notifica usuario e move para aguardando2",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Notifica usuario e move para aguardando2": {
+            "main": [
+                [
+                    {
+                        "node": "NOTIFICA SETOR",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "When clicking 'Execute workflow'": [
+            {
+                "query": "Vendas, nome: Cliente Exemplo, cidade: Cidade Exemplo, telefone: 5511999999999@s.whatsapp.net, resumo: Cliente está fazendo pesquisa de preço sobre produto X, sem preferência de marca ou tipo. status_horario: Dentro do Horário"
+            }
+        ]
+    },
+    "meta": {
+        "templateCredsSetupCompleted": false,
+        "instanceId": "{{N8N_INSTANCE_ID}}"
+    }
+}
